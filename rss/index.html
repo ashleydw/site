@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title><![CDATA[ashleyd.ws]]></title><description><![CDATA[So web 3.0, I used my name for a domain]]></description><link>https://ashleyd.ws/</link><generator>Ghost 0.7</generator><lastBuildDate>Fri, 18 May 2018 08:22:20 GMT</lastBuildDate><atom:link href="https://ashleyd.ws/rss/" rel="self" type="application/rss+xml"/><ttl>60</ttl><item><title><![CDATA[Running multiple iOS simulators with React Native]]></title><description><![CDATA[<p>Whist developing an app for React Native I wanted to be able to compare the iPhone version vs the iPad version; basically a slightly different layout between the two.</p>
+
+<p>xcode doesn't allow multiple simulators to run and attach to it's debugger but <a href="http://stackoverflow.com/questions/26446346/xcode6-run-two-instances-of-the-simulator">you can run multiple simulators together</a>:</p>
+
+<pre><code>cd /Applications/</code></pre>]]></description><link>https://ashleyd.ws/running-multiple-ios-simulators-with-react-native/</link><guid isPermaLink="false">c8116753-0681-4131-8dc1-16b4a94de707</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 30 Mar 2016 20:05:08 GMT</pubDate><content:encoded><![CDATA[<p>Whist developing an app for React Native I wanted to be able to compare the iPhone version vs the iPad version; basically a slightly different layout between the two.</p>
+
+<p>xcode doesn't allow multiple simulators to run and attach to it's debugger but <a href="http://stackoverflow.com/questions/26446346/xcode6-run-two-instances-of-the-simulator">you can run multiple simulators together</a>:</p>
+
+<pre><code>cd /Applications/Xcode.app/Contents/Developer/Applications  
+open -n Simulator.app  
+open -n Simulator.app  
+</code></pre>
+
+<p>Once open, the simulator hardware can be changed to the desired platform. The problem with this is however getting the apps onto the simulators, and running them both. It's also a pain to have to change each simulator hardware every time it opens.</p>
+
+<p>I modified the <code>react-native run-ios</code> command to allow multiple simulators to be spawned, built against, and run with the RN app. The command is:</p>
+
+<p>`react-native run-ios --simulator "iPhone 6, iPad Retina"</p>
+
+<p>Where the <code>--simulator</code> flag is a CSV of simulators available (checked against <code>xcrun simctl list devices</code>).</p>
+
+<p>Here is is in action:</p>
+
+<iframe src="https://drive.google.com/a/ashleyd.ws/file/d/0BwTfufgK1OxfUW5vYzM0WEpaVFU/preview" width="640" height="430" allowfullscreen></iframe>
+
+<p>When <a href="https://github.com/facebook/react-native/pull/6179">https://github.com/facebook/react-native/pull/6179</a> get's merged, hot loading works too!</p>]]></content:encoded></item><item><title><![CDATA[Custom MarshalJSON in GOLang]]></title><description><![CDATA[<p>Getting JSON from structs or any <code>interface{}</code> in GO is pretty trivial, but custom marshalling can be troublesome. </p>
+
+<p>The following struct is based on that in the <a href="http://blog.golang.org/json-and-go">GO docs</a> but with the <code>json</code> field hints to demonstrate the output modifications produced.</p>
+
+<pre><code>type Message struct {  
+    Name string `json:"user"`
+    Body string</code></pre>]]></description><link>https://ashleyd.ws/custom-json-marshalling-in-golang/</link><guid isPermaLink="false">306ff96f-7732-4256-a245-3ef4ea8b8b15</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Thu, 24 Mar 2016 10:58:08 GMT</pubDate><content:encoded><![CDATA[<p>Getting JSON from structs or any <code>interface{}</code> in GO is pretty trivial, but custom marshalling can be troublesome. </p>
+
+<p>The following struct is based on that in the <a href="http://blog.golang.org/json-and-go">GO docs</a> but with the <code>json</code> field hints to demonstrate the output modifications produced.</p>
+
+<pre><code>type Message struct {  
+    Name string `json:"user"`
+    Body string `json:"message"`
+    Time int64  `json:"timestamp"`
+}
+
+m := Message{"Alice", "Hello", 1294706395881547000}
+
+b, err := json.Marshal(m)
+
+b == {  
+"user":"Alice",
+"message":"Hello",
+"timestamp":1294706395881547000
+}
+</code></pre>
+
+<p>The above shows how to rename fields during output, but modifying an output requires the a custom <code>MarshalJSON</code> function on the struct. If this function exists, <code>json.encode</code> will call it recurvisely on the struct and any interfaces within the struct. This is also helpful if you cannot modify the struct with the <code>json</code> field hints.</p>
+
+<p>This simple example performs the same modifications as the field hints above and adds the additional ID and Origin fields.</p>
+
+<pre><code>func (m *Message) MarshalJSON() ([]byte, error) {  
+    return json.Marshal(&amp;struct {
+        ID          string `json:"id"`
+        Origin      string `json:"origin"`
+        Name        string `json:"name"`
+        Message     string `json:"message"`
+        Timestamp   int64  `json:"timestamp"`
+    }{
+        ID:        "Alices-Message-ID"
+        Origin:    "Wonderland"
+        Name:      m.Name,
+        Message:   m.Body,
+        Timestamp: m.Time,
+    })
+}
+</code></pre>
+
+<p>The problem with this solution is the requirement to specify each of the fields that exist on the Message struct. If we use both the <code>json</code> field hints and the above approach we eliminate this issue.</p>
+
+<pre><code>func (m *Message) MarshalJSON() ([]byte, error) {  
+    return json.Marshal(&amp;struct {
+        ID          string `json:"id"`
+        Origin      string `json:"origin"`
+        *Message
+    }{
+        ID:        "Alices-Message-ID"
+        Origin:    "Wonderland"
+        Message:   m
+    })
+}
+</code></pre>
+
+<p>However, the above function will loop; the outer <code>struct</code> marshalling will call the inner <code>Message</code> struct marshal function and there begins the loop. To circumvent this issue we must instead "copy" the original object; this object will have the same properties of the original but no functions - thus removing the infinite loop.</p>
+
+<pre><code>func (m *Message) MarshalJSON() ([]byte, error) {  
+    type Copy Message
+    return json.Marshal(&amp;struct {
+        ID          string `json:"id"`
+        Origin      string `json:"origin"`
+        *Copy
+    }{
+        ID:        "Alices-Message-ID"
+        Origin:    "Wonderland"
+        Copy:      (*Copy)(m),
+    })
+}
+</code></pre>]]></content:encoded></item><item><title><![CDATA[Lightbox Github page reaches 500k page views in 2015]]></title><description><![CDATA[<p>During 2015, the <a href="http://ashleydw.github.io/lightbox/">Github documentation page for my lightbox plugin</a> reached ~527k page views from ~200k users.</p>
+
+<p>That's excluding ~30k fake referrals from those damn-annoying bots promoting their insurance or SEO services.</p>
+
+<p>Most visitors come via searches but a great deal also land from the <a href="https://expo.getbootstrap.com/resources/">Bootstrap expo</a>.</p>
+
+<p>It's interesting how</p>]]></description><link>https://ashleyd.ws/hitting-the-500k-page-views-for-github-lightbox-page/</link><guid isPermaLink="false">a8f254d4-5517-4fc0-bfaa-3f449be9b738</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Thu, 07 Jan 2016 14:46:02 GMT</pubDate><content:encoded><![CDATA[<p>During 2015, the <a href="http://ashleydw.github.io/lightbox/">Github documentation page for my lightbox plugin</a> reached ~527k page views from ~200k users.</p>
+
+<p>That's excluding ~30k fake referrals from those damn-annoying bots promoting their insurance or SEO services.</p>
+
+<p>Most visitors come via searches but a great deal also land from the <a href="https://expo.getbootstrap.com/resources/">Bootstrap expo</a>.</p>
+
+<p>It's interesting how a small side-project that was a by-product of a separate side-project (ekko was going to be a music service, which I got side tracked on and eventually binned) has become one of the main plugins for bootstrap.</p>
+
+<p>Let's see if 2016 can beat the 500k mark!</p>]]></content:encoded></item><item><title><![CDATA[Converting localisation of numerical values in React Native applications]]></title><description><![CDATA[<p>TLDR: Not translations with L18N, but handling numerical localisation <a href="https://github.com/fixdio/react-native-locale">https://github.com/fixdio/react-native-locale</a>.</p>
+
+<p>The application we are currently writing at <a href="https://fixd.io">fixd.io</a> allows users to enter several numerical values. This poses a problem with localisation due to the point based system used in device locale. As an example, the</p>]]></description><link>https://ashleyd.ws/localisation-numerical-values-react-native/</link><guid isPermaLink="false">2e20c582-7cb2-4416-9d2b-41ef79ff5fbf</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 16 Dec 2015 13:59:50 GMT</pubDate><content:encoded><![CDATA[<p>TLDR: Not translations with L18N, but handling numerical localisation <a href="https://github.com/fixdio/react-native-locale">https://github.com/fixdio/react-native-locale</a>.</p>
+
+<p>The application we are currently writing at <a href="https://fixd.io">fixd.io</a> allows users to enter several numerical values. This poses a problem with localisation due to the point based system used in device locale. As an example, the below shows the Danish locale vs the UK locale; the point system in Denmark uses comma notation, in the UK full-stops/periods/points.</p>
+
+<p><img src="https://ashleyd.ws/content/images/2015/12/denmark-vs-uk-locales.jpg" alt=""></p>
+
+<p>The API for the app assumes, and requires, that numerical values passed to it are in decimal format with a point (full-stop/period/.); anything else will fail validation. Although we wanted to build a flexible API that can be used for various endpoints, we didn't feel that we should be handling the conversion of different point notations to the one which we require.</p>
+
+<p>Rather, we enforce the conversion on the client. For our mobile app, this meant converting the notation used to the standard point notation.</p>
+
+<p>There are several existing projects for React Native L18N, but none for localisation such as this. So, it was down to me to write the conversion. iOS has this localisation conversion <a href="https://developer.apple.com/library/ios/documentation/MacOSX/Conceptual/BPInternational/InternationalizingLocaleData/InternationalizingLocaleData.html">system built in</a>; I "just" needed to expose it to our React Native JavaScript.</p>
+
+<p>The React Native localisation project is available as open source on the Fixd GitHub: <a href="https://github.com/fixdio/react-native-locale">https://github.com/fixdio/react-native-locale</a>.</p>
+
+<p>It allows one to to format numerical values based on the point system to a users locale format in number of different styles, including decimal, currency, percentage etc. The core functionality required for conversion of locale notation to point notation is the function <code>numberFromDecimalString</code>.</p>
+
+<p>This function takes a numerical string in the locale notation and returns the point system value via the Promise resolve function. The function is to be used when a user has interacted to use the value with the API. In the Fixd application, on the Save functionality, we show a loading interface, run the function, wait for the Promise to return, interact with the API, and then display a state change based on success or failure.</p>]]></content:encoded></item><item><title><![CDATA[Realtime Twitter game: ASOS Two-Up]]></title><description><![CDATA[<p>ASOS Australia wanted to run an Anzac Day promotional Twitter game similar to that of the Australian game "Two-Up" (<a href="https://en.wikipedia.org/wiki/Two-up">https://en.wikipedia.org/wiki/Two-up</a>). The logic behind the game itself is straightforward - flip two coins and compare the result to the users guess - the key challenges surround</p>]]></description><link>https://ashleyd.ws/realtime-asos-twitter-game/</link><guid isPermaLink="false">3f8c330c-b43a-4b95-96fe-d66b32b3a631</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Tue, 17 Nov 2015 16:41:59 GMT</pubDate><content:encoded><![CDATA[<p>ASOS Australia wanted to run an Anzac Day promotional Twitter game similar to that of the Australian game "Two-Up" (<a href="https://en.wikipedia.org/wiki/Two-up">https://en.wikipedia.org/wiki/Two-up</a>). The logic behind the game itself is straightforward - flip two coins and compare the result to the users guess - the key challenges surround running the game on Twitter in realtime.</p>
+
+<p><img src="https://ashleyd.ws/content/images/2015/11/Screen-Shot-2015-11-17-at-18-03-07.png" alt=""></p>
+
+<p>The aim of the game was to produce a high engagement and sharing rate on the ASOS AU Twitter account for a period of time building up to, and contributing to the promotions held on the day.</p>
+
+<p>The image shows some basic statistical results. As is shown, the game targets were well exceeded. Over the 5 hour period, the game processed over ten thousand Tweets. From the start I had recognised that ASOS has a huge social media following, and the game may be more popular than imagined; because of this I had built the system so that any number of processors could be started to handle increased traffic.</p>
+
+<p>The automatic reply system meant that the ASOS twitter account had to reply to around 10,000 Tweets in the time period. Twitter has API rate limiting that would normally prevent this, however, the ASOS Twitter account is whitelisted for unlimited API usage.</p>
+
+<div style="text-align:center">  
+<img src="https://ashleyd.ws/content/images/2015/11/asos-twitter-game-results.png" alt="Game statistics" width="400" style="margin:auto; margin-bottom:25px;">  
+</div>
+
+<p>The code is bespoke to the ASOS game requirements, and honestly rather simple once divided into separate systems. However, hopefully this post can inspire others how to create such a system.</p>
+
+<p>The game system broken down into stages:</p>
+
+<ul>
+<li>Listen for Tweets directed to the ASOS AU Twitter account that contain the hashtag used for the game (#TwoUp).
+<ul><li>Store the Tweet.</li></ul></li>
+<li>Process Tweets as quickly as possible in FIFO method:
+<ul><li>Filter out Tweets with offensive words and retweets.</li>
+<li>Rate limit users to N entries every 5 minutes.</li>
+<li>Extract the guess from the Tweet; a string containing a single valid guess was accepted (a user could not have #Heads and #Tails in the same Tweet).</li>
+<li>If the user guessed correctly; winners were entered into a second round where they had the potential to win a prize.</li>
+<li>Based on the second round win/loss, winning Tweets were given a prize; the game rules specified that a human was required had to be involved in this process so a realtime dashboard was developed for ASOS to monitor the game and reply to Tweets with prize information.</li>
+<li>Losing tweets receive an automatic reply from a number of pre-written replies with images.</li></ul></li>
+</ul>
+
+<p>Simply put; receiving, storing, and processing Tweets. The receiving and processing components were written in Python; for no other reason than I felt it was the best adapted language to the requirements and time period I had to produce the system. The storage system was Redis, and the dashboard used to monitor the game was written in PHP and standard frontend technologies.</p>
+
+<p><img src="https://ashleyd.ws/content/images/2015/11/Screenshot_2015-04-24-22-05-18.png" alt="Screenshot of the ASOS Australia Twitter account" width="200" style="float:right; margin-left:25px; margin-bottom:25px;"></p>
+
+<p>A couple of example replies are shown in the app screenshot; one person being rate-limited, another losing their try.</p>
+
+<p>For the first stage - receiving Tweets - the Twitter API allows a subscription to be created that allows an API to listen for hashtags for a particular account. Having already worked on a similar process for GOTags, I was familiar with the problems that arise when using a subscription based API; connectivity issues with both their API and mine are potential problems, as too is the possibility that a large volume of data will be received. The receiving endpoint needs to be able to receive a Tweet and offload it into the storage system as quickly as possible.</p>
+
+<p>In-memory databases are favourable when requiring as near real-time systems as possible, as such I used Redis. Data was stored in a list data structure; this allowed me to use POP and PUSH methods on the list; creating a FIFO queue of Tweets waiting to be processed that any of the processor component could access.</p>
+
+<p>A processor process polls the Redis database for Tweets to process. The Tweet is then processed through the game logic, and either passed onto the second stage of the game or immediately replied to with a losing message. These processors had two layers of fault tolerance; on API/database failure the processor would restart itself, if the process completely stopped, Supervisor would restart it.</p>
+
+<p>I started the game with two processors running, but soon realised the volume of Tweets was causing a delay in processing (at a maximum, 30 minutes into the game, the delay was around 45 seconds). Because of this, I threw more server kittens at the game, and started 5 more processors; this reduced the processing to between 1 and 2 seconds. In hind-sight, I should have started large and scaled down if the server was struggling to cope.</p>
+
+<p>The majority of the time spent whilst processing replies was uploading the Tweet images to the Twitter API. It's unfortunate that media images are bespoke to each Tweet, as a faster solution would have been to reuse the same images already hosted on Twitter. However, apart from a few exceptions, the images were mostly under 300kb so the delay was minimal.</p>
+
+<p>The individual components of the system performed well, and no failures were experienced. At the end of the five hour period, the subscription was removed and the processors gracefully stopped.</p>
+
+<p>The game was a huge success and there are rumours flying around that a similar game will be played but on a global basis. The system to manage the amount of Tweets that a global game will attract will be substantial.</p>]]></content:encoded></item><item><title><![CDATA[Latest Projects]]></title><description><![CDATA[<h2 id="gotagsdomorewithyourinstagramphotos">GOtags - Do more with your Instagram photos</h2>
+
+<p>Make your Instagram shoppable! Gotags make your posts linkable and send content straight to your followers' inbox or even add products straight to their <br>
+basket! <a href="https://gotags.co.uk">gotags.co.uk</a></p>
+
+<h2 id="bootstrap3lightboxbasedonthemodalcomponent">Bootstrap 3 Lightbox based on the modal component</h2>
+
+<p>A gallery lightbox built in coffeescript</p>]]></description><link>https://ashleyd.ws/latest-projects/</link><guid isPermaLink="false">06938c2d-9c02-42a5-9180-cefb809376ed</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Fri, 20 Mar 2015 01:54:38 GMT</pubDate><content:encoded><![CDATA[<h2 id="gotagsdomorewithyourinstagramphotos">GOtags - Do more with your Instagram photos</h2>
+
+<p>Make your Instagram shoppable! Gotags make your posts linkable and send content straight to your followers' inbox or even add products straight to their <br>
+basket! <a href="https://gotags.co.uk">gotags.co.uk</a></p>
+
+<h2 id="bootstrap3lightboxbasedonthemodalcomponent">Bootstrap 3 Lightbox based on the modal component</h2>
+
+<p>A gallery lightbox built in coffeescript <a href="https://github.com/ashleydw/lightbox">github.com/ashleydw/lightbox</a></p>
+
+<h2 id="guessthattheme">Guess That Theme</h2>
+
+<p>I reckon I can guess the theme that website uses <a href="http://guessthattheme.herokuapp.com/">guessthattheme.herokuapp.com</a></p>
+
+<h2 id="githubconnected">GitHub connected</h2>
+
+<p>A small ruby app to test neo4j with github data <a href="https://github.com/ashleydw/githubconnected">github.com/ashleydw/githubconnected</a></p>
+
+<h2 id="simplelinkcreatesandopenslinks">Simple Link: creates and opens links!</h2>
+
+<p>Just because Go is awesome and you know it <a href="https://github.com/ashleydw/simple-link">github.com/ashleydw/simple-link</a></p>]]></content:encoded></item><item><title><![CDATA[Facebook's Selenium PHP Event Firing Web Driver]]></title><description><![CDATA[<p>Back in late 2013, <a href="https://github.com/facebook/php-webdriver/pull/76">I wrote</a> the Event Firing webdriver for Facebook's implementation of the <a href="https://github.com/facebook/php-webdriver">Selenium webdriver in PHP</a>.</p>
+
+<p>The reasoning behind the event firing webdriver is that actions can be called at special events (no shit huh). The classes implement the official <a href="http://selenium.googlecode.com/git/docs/api/java/org/openqa/selenium/support/events/EventFiringWebDriver.html">Java methods fully</a>, and as such, the</p>]]></description><link>https://ashleyd.ws/facebooks-selenium-php-event-firing-web-driver/</link><guid isPermaLink="false">74c8c978-2d1b-4d02-88e6-19666bc9c09a</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Thu, 19 Mar 2015 16:00:00 GMT</pubDate><content:encoded><![CDATA[<p>Back in late 2013, <a href="https://github.com/facebook/php-webdriver/pull/76">I wrote</a> the Event Firing webdriver for Facebook's implementation of the <a href="https://github.com/facebook/php-webdriver">Selenium webdriver in PHP</a>.</p>
+
+<p>The reasoning behind the event firing webdriver is that actions can be called at special events (no shit huh). The classes implement the official <a href="http://selenium.googlecode.com/git/docs/api/java/org/openqa/selenium/support/events/EventFiringWebDriver.html">Java methods fully</a>, and as such, the cross implementation specifics can be followed.</p>
+
+<p>As an example, below is how to capture a screenshot when an error occurs in the webdriver.</p>
+
+<script src="https://gist.github.com/ashleydw/04013b1b95ec7e4b2336.js"></script>]]></content:encoded></item><item><title><![CDATA[Blocking streak.com's email tracking with Chrome and AdBlock Plus]]></title><description><![CDATA[<p>Streak.com has recently opened email tracking up to the masses, and whilst this is nothing new (newsletters and companies often do this) it got me wondering if I actually want people knowing when I've opened their email. This is like when Facebook added the dreaded "Seen at" status when</p>]]></description><link>https://ashleyd.ws/blocking-streak-coms-email-tracking-with-chrome-and-adblock-plus/</link><guid isPermaLink="false">6f32b907-3143-4298-8003-4511dcf7e4b4</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 18 Mar 2015 00:58:23 GMT</pubDate><content:encoded><![CDATA[<p>Streak.com has recently opened email tracking up to the masses, and whilst this is nothing new (newsletters and companies often do this) it got me wondering if I actually want people knowing when I've opened their email. This is like when Facebook added the dreaded "Seen at" status when you read a message - meaning you can no longer open a message and pretend like you've been too busy to check Facebook within the past hour.</p>
+
+<p>The first thing that came to mind was to create an extension to block their tracking image, however <a href="https://chrome.google.com/webstore/detail/adblock-plus/cfhdojbkjhnklbpkdaibdccddilifddb">AdBlock Plus</a> already does blocking efficiently. So, how do we block streak.com's email tracking? Simple, add a customer filter with the domain <code>mailfoogae.appspot.com</code>.</p>
+
+<p>Do this under "Add your own filters" in the AdBlock Plus options:  <a href="https://adblockplus.org/en/images/gettingstarted_filters_add_cr_3.png?a=show">https://adblockplus.org/en/images/gettingstarted<em>filters</em>add<em>cr</em>3.png?a=show</a>. This domain is streak.com's appspot domain - you can even visit their website through it (which won't work correctly if you add the filter).</p>]]></content:encoded></item><item><title><![CDATA[nginx.conf for Laravel]]></title><description><![CDATA[<p>Laravel comes with a .htaccess file by default but this is not useful for nginx. In place of it I present the below conf file built from a variety of sources, and provides the essentials of what you need to get up and running. This is the simplified version that</p>]]></description><link>https://ashleyd.ws/nginx-conf-for-laravel/</link><guid isPermaLink="false">eb938f51-dd95-4fb5-b0bf-625d3aff1ef4</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 18 Mar 2015 00:58:13 GMT</pubDate><content:encoded><![CDATA[<p>Laravel comes with a .htaccess file by default but this is not useful for nginx. In place of it I present the below conf file built from a variety of sources, and provides the essentials of what you need to get up and running. This is the simplified version that our <a href="https://gotags.co.uk">GOtags service</a> is running - which is on Ubuntu 14.X, a LEMP stack with a few other services thrown in, all hosted from Linode.</p>
+
+<script src="https://gist.github.com/ashleydw/afd389b1e763d3c1cf1f.js"></script>]]></content:encoded></item><item><title><![CDATA[Populating Magento cart via the API]]></title><description><![CDATA[<p>For our recent new service <a href="https://ashleyd.ws/populating-magento-cart-via-the-api/gotags.co.uk">gotags.co.uk</a>, we wanted to integrate directly with Magento to allow users to directly populate their shopping carts from Instagram. Magento, being the beast of a code base it is (seriously, it's stupidly complex) fortunately has the ability for custom SOAP API's to be</p>]]></description><link>https://ashleyd.ws/populating-magento-cart-via-the-api/</link><guid isPermaLink="false">577efdb2-7b53-4170-9218-dfe71f19f896</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 18 Mar 2015 00:58:02 GMT</pubDate><content:encoded><![CDATA[<p>For our recent new service <a href="https://ashleyd.ws/populating-magento-cart-via-the-api/gotags.co.uk">gotags.co.uk</a>, we wanted to integrate directly with Magento to allow users to directly populate their shopping carts from Instagram. Magento, being the beast of a code base it is (seriously, it's stupidly complex) fortunately has the ability for custom SOAP API's to be built on top of the already existing SOAP API. Our custom endpoint is quite simple; receive an email, a product SKU, some text, and then attempt to populate the relevant customers cart, returning JSON depending on what happened. </p>
+
+<p>So, how's this done? The <a href="http://www.magentocommerce.com/magento-connect/catalog/product/view/id/24003/s/gotags">code is freely available from the module download</a> but here's the in-and-outs of it, skipping all the boring setup stuff.</p>
+
+<p>The most complex part is attempting to find options based on a string given. This string could be blank, completely random text, YOLO, or actual options like "large blue". These human readable options need to be translated into actual option objects, before the product can be added to the cart:</p>
+
+<script src="https://gist.github.com/5676894d366c5251a6a0.js?file=magento_finding_options.php" type="text/javascript"></script>
+
+<p>Once you have the product, the next difficulty is in adding the product to the customer cart. Magento carts become stale and are archived off, and there's no simple way of getting the customer cart, stale or not, instead you must do the leg work yourself. To do this, you need to lookup an active quote, and then get the cart from the quote. The below shows how to find the active cart, or create one if not found. <code>_getStoreId</code> here simply returns the default store id (this is also stupidly complex but not at all interesting).</p>
+
+<script src="https://gist.github.com/5676894d366c5251a6a0.js?file=magento_add_to_customer_cart.php" type="text/javascript"></script>
+
+<p>Download the module from the link above to view the full source code, or if you have a Magento store, you can <a href="https://gotags.co.uk/magento">integrate directly with GOtags</a> and let us do the leg work.</p>]]></content:encoded></item><item><title><![CDATA[Scraping data with phantomjs]]></title><description><![CDATA[<p>For the sake of their server, I won't post the link, but recently I needed to scrap a load of data from a fairly detailed page. This is pretty trivial using Ruby and the Nokogiri gem - nothing is particularly hard about scraping data when a gem does all the</p>]]></description><link>https://ashleyd.ws/scraping-data-with-phantomjs/</link><guid isPermaLink="false">56a738ab-3bbc-44c0-bd5e-b7118d9fde53</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 18 Mar 2015 00:57:52 GMT</pubDate><content:encoded><![CDATA[<p>For the sake of their server, I won't post the link, but recently I needed to scrap a load of data from a fairly detailed page. This is pretty trivial using Ruby and the Nokogiri gem - nothing is particularly hard about scraping data when a gem does all the hard work for you. However, this particular site in question loads all the data through ajax requests which return JSON. Perfect! Right?</p>
+
+<p>Well not really. I jumped straight for the ajax URL which on first appearance gave me all the JSON-data-goodness I could ever need. However, after some experimenting I started getting 404 errors on pages I knew existed. It turns out that the particular website has some rate limiting, and/or session protection from people like me who are after their data (and yes, it is purely for educational purposes) - if the URL was accessed directly, without going to it's parent loading page, it would throw a 404. The bastards; how dare they make getting their lovely formatted JSON harder than loading a URL.</p>
+
+<p>Attempts with referer faking, cookie setting, getting the urls in particular orders etc failed. So I turned to phantomjs to get the job done. Since phantomjs is effectively a browser, the website in question knew nothing of my plans to harvest all their data. </p>
+
+<p>The long and short of it is in the gist, for your full browsing pleasure. It is by no means a good script - I wanted to implement waitFor throughout (in place of the setTimeout) but I didn't have time [read: couldn't be bothered] to sort out the variable namespacing that phantomjs forces inside page.evaluate.</p>
+
+<p>Happy scraping.</p>
+
+<script src="https://gist.github.com/ashleydw/10922397.js"></script>]]></content:encoded></item><item><title><![CDATA[The web is dead. Long live the web!]]></title><description><![CDATA[<p>I am by no means a Master Splinter of web, my mediocre web experience can be at most gauged at 7 years experience. And most of that has been learning the thing. But lets get one thing straight; if you want to earn money, quit the web design and development</p>]]></description><link>https://ashleyd.ws/the-web-is-dead-long-live-the-web/</link><guid isPermaLink="false">8a9c7d27-3d5b-40ea-b9b0-fbf2be2679b2</guid><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 18 Mar 2015 00:57:39 GMT</pubDate><content:encoded><![CDATA[<p>I am by no means a Master Splinter of web, my mediocre web experience can be at most gauged at 7 years experience. And most of that has been learning the thing. But lets get one thing straight; if you want to earn money, quit the web design and development freelancing game. There is simply no money to be made.</p>
+
+<p>Well, there is money - but you'll be working too many hours for too little reward. By all means, if you can get a job in an agency, take it. But forget about starting up as a freelancer or starting your own agency; you will end up like the majority of other web hopefuls; you'll either burn yourself out working 60 hour weeks for little monetary compensation, or you'll die trying.</p>
+
+<p>As the rest of the worlds business have done far too often over the past 5 to 10 years, we can blame all this on the recession. However, that's not the problem; the problem is saturation.</p>
+
+<p>Everybody knows somebody "who can make websites". Or has Photoshop. Or once made a shop using WordPress. And good on them, they're learning to code and hoping to make some money on the way. I'm glad things like <a href="http://www.codecademy.com/">codecademy.com</a> have been made; learning HTML and CSS inevitably leads onto JavaScript, and JavaScript, no matter what you think of it, is a fully fledged programming language - take node.js for example; who's to say that someone learning on Code Academy right now, after some hard work and time, won't be the next guy coding node modules?</p>
+
+<p>But this saturation is the problem. So much competition has driven down the costs so much, that I can get a full HTML template from Theme Forest for $10, and then pay someone on Fiverr $5 to customise it. When was the last time you wanted to make a full web template for $15? Plug this into WordPress in their wonderfully refined setup, and (let's admit it, even though we hate to), amazing piece of software, and you have yourself a website. $50 dollars, max, will get you a good looking website, with everything you need.</p>
+
+<p>But it's just HTML, I hear you cry! Wrong. There are many sites that do the same. You're a designer? You'll hate <a href="http://99designs.com/">99designs</a>. Off the top of my head, the only other businesses I can think of right now that submit so much tender work for the chance to get given the opportunity to build their implementation is Architecture - but they get paid to tender. And they have great office parties.</p>
+
+<p>But client's want face-to-face contact, I hear you cry! Sure, most of them do to some extent. Remember to include that time in your quote. Maybe they'll share your great ideas with the guy on Fiverr, that'd be a sweet Romeo and Juliet triangle-web-style relationship. Maybe you can even fix it for them once they're finished.</p>
+
+<p>But there are good clients, I hear you cry! Sure there are. You just need to get them, and I wish you all the luck getting them. Just remember, the good clients, the ones with money, usually already have a relationship with a large agency. Or, if they're big enough, they have their own people to do it.</p>
+
+<p>Maybe you're lucky, and you get some clients. They've probably heard of this WordPress thing and maybe even know about pre-built themes. So when you quote them, a (very) modest £2000 for a website, they'll spit their coffee out and demand to know why it's going to cost so much. They'll crunch the numbers: they'll take your estimate of a 3 week delivery time (60 hour weeks, remember?), whittle the three weeks down to two weeks <em>MAX</em>, and finally come out with the <strong>absolutely absurd(!)</strong> figure that you're earning around <em>£16 an hour</em>.</p>
+
+<p>£16. Pretty ok for a freelancer starting out? Well.. take the tax off, take your expenses off, add the time that you spend communicating with the client onto the design &amp; development estimate, bug fixing, changing that fucking button to flash in a different fucking colour, server maintenance, the occasional security audit... and what will you get? I make it a whole bag of pretty much nothing.</p>
+
+<p>The client will haggle you down, or you'll drop them. If you do, you'll notice two months later something will appear. I guarantee, if you look at the source, it'll be a WordPress site, on a theme, with CSS and JavaScript scattered all over it. But guess what?! It's responsive!! I know what you'll say: "fuck 'em" .</p>
+
+<p>Believe me. I've made the same mistakes. Trying to explain to a fairly computer-literate person that I have to charge them for upgrading the CMS of their website because there's a security flaw or required update in XYZ is not even worth the time in the majority of cases. They won't agree; "if ain't broken, don't fix it!". But you're a developer, you have to, or you'll have that niggling worry that a kid in some other country will abuse the flaw, and post a picture of a cat instead of the logo. So you fix it. You're £16 is probably fast approaching £0 an hour.</p>
+
+<p>I explained once to a client why I charged what I did. The client in question was arguing over that it would "only take an hour or two, can't you chuck it in for free?". No.. Fuck you no. It may actually only take me 10 minutes to do, but I've spent the good part of the past 10 years learning how to do it in 10 minutes. I politely pointed to the contract section that states all work is a minimum of 2 hours, no matter what it is; I wanted that £32 if it killed me. In the end, I couldn't be bothered; the time wasn't worth it, I packed his public files up and gave him his notice.</p>
+
+<p>The long and short of this is, unless you can get good clients constantly coming in, or have a good relationship (and I mean money making relationship) with retainer clients, the time vs income is simply too thinly spread. You are not your own boss, you are the clients employee. You do not get paid holidays, or sick days, or weekends without mail. You don't even get water cooler gossip about the weird guy in accounting; that weird guy in accounting is you.</p>
+
+<p>I admit, there will be some who make a lot of money from freelancing. Lucky them. I am jealous, there I admit. But I've had my share of good times freelancing. I once sat in a beach bar in south India looking out at the sea, sipping my mango juice, and watching an elephant eat bananas - all whilst writing Unit Tests. Freelancing is great, for the times it's good. The rest of the time, it's probably not worth it.</p>
+
+<p>So what's the point of this? You've learnt your PHP, HTML, and CSS, what now? <strong>Long live the web!</strong></p>
+
+<p>In an abbreviation. SaaS: Software as a Service (and the inherently similar PaaS). Here's the money to be made. Now all you need is an idea. And you know what? You could even take a good idea that's been done before, and make it great. Don't believe me? Ask my mate Mark Zuckerberg, he'll tell you where it's at.</p>
+
+<p>My next thing? "Facebook, but more social". There's a quote for you, put it on the fridge. I hope the person who once proposed that to me is a millionaire by now.</p>]]></content:encoded></item><item><title><![CDATA[The dreaded first post]]></title><description><![CDATA[<p>Writing the first post for a blog sucks. Sucks big time.</p>
+
+<p>Therefore, no more. No more first post.</p>]]></description><link>https://ashleyd.ws/welcome-to-ghost/</link><guid isPermaLink="false">a16291b1-8cb3-4a2e-8f9c-487f3bcfd622</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ashley]]></dc:creator><pubDate>Wed, 18 Mar 2015 00:00:26 GMT</pubDate><content:encoded><![CDATA[<p>Writing the first post for a blog sucks. Sucks big time.</p>
+
+<p>Therefore, no more. No more first post.</p>]]></content:encoded></item></channel></rss>
